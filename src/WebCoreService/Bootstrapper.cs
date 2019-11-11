@@ -1,14 +1,12 @@
-﻿namespace WebApiService
+﻿namespace WebCoreService
 {
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Security.Principal;
-    using System.Threading;
-    using System.Web;
     using BusinessLayer;
+    using Microsoft.AspNetCore.Http;
     using SimpleInjector;
-    using SimpleInjector.Lifestyles;
 
     public static class Bootstrapper
     {
@@ -16,25 +14,28 @@
 
         public static IEnumerable<QueryInfo> GetKnownQueryTypes() => BusinessLayerBootstrapper.GetQueryTypes();
 
-        public static Container Bootstrap()
+        public static Container Bootstrap(Container container)
         {
-            var container = new Container();
-
-            container.Options.DefaultScopedLifestyle = new AsyncScopedLifestyle();
-
             BusinessLayerBootstrapper.Bootstrap(container);
 
-            container.RegisterSingleton<IPrincipal>(new HttpContextPrincipal());
-            container.RegisterSingleton<ILogger>(new DebugLogger());
+            container.RegisterSingleton<IPrincipal, HttpContextPrincipal>();
+            container.RegisterInstance<ILogger>(new DebugLogger());
 
             return container;
         }
 
         private sealed class HttpContextPrincipal : IPrincipal
         {
+            private readonly IHttpContextAccessor httpContextAccessor;
+
+            public HttpContextPrincipal(IHttpContextAccessor httpContextAccessor)
+            {
+                this.httpContextAccessor = httpContextAccessor;
+            }
+
             public IIdentity Identity => this.Principal.Identity;
-            private IPrincipal Principal => HttpContext.Current.User ?? Thread.CurrentPrincipal;
             public bool IsInRole(string role) => this.Principal.IsInRole(role);
+            private IPrincipal Principal => this.httpContextAccessor.HttpContext.User;
         }
 
         private sealed class DebugLogger : ILogger
